@@ -25,7 +25,7 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 
 ## Implementation and trials
 - Created public repo https://github.com/marcelotournier/qwenflash3090 and pushed the initial research commit.
-- Added plain-Docker lifecycle with busy-GPU refusal, loopback binding, private generated key, explicit configuration, qualification-gated restart policy; stdlib concurrent benchmark with native timings; Maya source build, verified/resumable model downloader and pack commands; nine passing offline tests and CI.
+- Added plain-Docker lifecycle with busy-GPU refusal, loopback binding, private generated key, explicit configuration, qualification-gated restart policy; stdlib concurrent benchmark with native timings; Maya source build, verified/resumable model downloader and pack commands; eleven passing offline tests (including busy-GPU refusal and a real local HTTP round trip) and CI.
 - Strata image pulled and pinned: `ghcr.io/niko1221/strata@sha256:83e37db8625c67b61c579fd7c0f9068f2d831037a937f139c569502b54290998` (0.2.9, bundled engine 0.1.55).
 - Explicitly stopped existing `glm53-flash-maya`, verified no remaining GPU compute processes, then launched `qwenflash-strata` on the same port 8000. Original container/data preserved; it remains stopped.
 - First launch with unlimited memlock failed at OCI startup: rootless daemon cannot raise its hard limit. Retried with 8 MiB explicit memlock and NVIDIA CDI; container runs and downloads. Future script launches inherit daemon limit instead of asking for infinity. Check pinning diagnostics on engine load; CUDA allocation success is not proven by download success.

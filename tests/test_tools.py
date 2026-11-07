@@ -91,6 +91,48 @@ class Tests(unittest.TestCase):
             self.assertFalse(model.verify(path, 4, digest))
             self.assertFalse(model.verify(path, 3, 'bad'))
 
+    def test_busy_gpu_refuses_start(self):
+        with patch('sys.argv', ['server.py', 'start']), \
+                patch.object(server, 'gpu_busy', return_value='123 other-server 22000 MiB'), \
+                patch.object(server, 'run') as run:
+            with self.assertRaisesRegex(SystemExit, 'stop them explicitly'):
+                server.main()
+            run.assert_not_called()
+
+    def test_http_completion_accounting(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.server.authorization = self.headers.get('Authorization')
+                body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                self.server.body = body
+                response = json.dumps({'choices': [{'message': {'content': '4'}, 'finish_reason': 'stop'}],
+                                       'usage': {'completion_tokens': 1, 'prompt_tokens': 12},
+                                       'timings': {'predicted_per_second': 100}}).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+            def log_message(self, *args):
+                pass
+        httpd = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                env = Path(tmp) / '.env'
+                env.write_text('API_KEY=test-key\n')
+                client = bench.Client(f'http://127.0.0.1:{httpd.server_port}', env)
+                result = client.complete('test-model', '2+2', 16)
+                self.assertEqual(result['usage']['prompt_tokens'], 12)
+                self.assertEqual(result['timings']['predicted_per_second'], 100)
+                self.assertEqual(httpd.authorization, 'Bearer test-key')
+                self.assertEqual(httpd.body['reasoning_effort'], 'none')
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join()
+
     def test_client_requires_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / '.env'
