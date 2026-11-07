@@ -2,7 +2,9 @@
 
 Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
 
-**Status:** implementation and offline tests complete; first Strata model download/qualification in progress. **No local throughput or full-context success claimed yet.**
+**Status:** Q2 is qualified, healthy, and tested with four near-256K requests. Q3/Q4 comparison is in progress. Results: [`reports/q2.json`](reports/q2.json).
+
+Q2 medians (3 rounds): **123.6 tok/s solo decode**, **134.4 tok/s aggregate four-client end-to-end**, **1836.8 / 2639.8 tok/s prefill** at ~4K / ~16K. Four-client per-request decode median: **41.1 tok/s**, not 100. All five near-256K retrieval requests returned the three passcodes; this synthetic test is not a general quality benchmark.
 
 ## Engines
 
@@ -57,6 +59,19 @@ Acceptance still required:
 - One ~256K prompt with retrieval checks, using reported prompt-token counts and room for output/template.
 - Four concurrent long sessions and actual `concurrency.serving == 4`. Shared KV capacity may not support **four full 256K histories**; do not confuse the context setting with that stronger requirement.
 - Repeated solo and four-client timings, then restart/reboot persistence.
+
+## Compare Q3 / Q4
+
+```sh
+make stop                         # stop Q2; check GPU before every switch
+python3 scripts/server.py start --quant q3   # ISTA IQ3_XXS, same 256K / four slots
+python3 scripts/suite.py --quant q3 --run    # once loaded; ~10 minutes of long tests
+python3 scripts/server.py stop --quant q3
+python3 scripts/server.py start --quant q4   # Unsloth UD-IQ4_XS, same settings
+python3 scripts/suite.py --quant q4 --run
+```
+
+The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3's byte-identical n-gram shard can be hard-linked after verifying its SHA256 against the upstream manifest, saving 28.8 GB. Q4 uses a different n-gram shard. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
 
 ## Maya baseline
 

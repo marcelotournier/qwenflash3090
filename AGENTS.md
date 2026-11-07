@@ -43,3 +43,20 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 3. Benchmark repeated 4K/16K prefill and 256-token solo/four-client decode. Report both per-request and aggregate rates.
 4. Verify ~256K retrieval and the stronger four-full-context requirement separately (shared KV may make the latter infeasible).
 5. Only then tune NVMe/stager/MTP/KV settings or compare versions. Do not advertise target rates until measured.
+
+## Q2 completed — local results
+- Download/preparation completed. Strata engine 0.1.55 reports **four actual slots**, 262144 context, streaming KV with 32768 resident cells; each slot costs ~0.95 GiB VRAM. All experts load into a 33.02 GiB pinned arena; `cudaHostRegister PORTABLE ok` despite the rootless memlock setting. PCIe probe 13.4 GB/s; NVMe PLE direct probe **115390 rows/s**, so no NVMe override needed.
+- `make qualify` passed arithmetic, context, actual slot count and four nonempty answers. Enabled and checked `restart=unless-stopped`; Docker health healthy. Explicitly stopping Q2 for quant comparisons preserves this policy and does not auto-restart it.
+- Three repeated 256-output-token rounds: solo decode median **123.6 tok/s** (123.4–128.5); four-client per-request median **41.1 tok/s** (36.2–47.3); aggregate four-client end-to-end median **134.4 tok/s** (134.1–136.4), including short-prompt reads/admission.
+- Repetitive ~3972-token prefill: median **1836.8 tok/s**, decode 125.6. ~15674-token prefill: median **2639.8 tok/s**, decode 125.9. INT8 KV, upstream MTP/default exact speed switches, no expert skipping. Solo goal met on these short/medium workloads; 100 tok/s PER CLIENT at concurrency four is NOT met.
+- One **261032-token** prompt: 110.38 s prefill (**2364.9 tok/s**), 20 output tokens, 56.4 tok/s decode; all three synthetic retrieval passcodes correct.
+- Four concurrently submitted near-full prompts: **261034–261037 input tokens each**, all three passcodes correct in every answer, 447.76 s total. Prompt work effectively serialized (~110 s each), so do not interpret this as parallel prefill or a sustained four-client decode benchmark. Short native decode figures varied 6.2–79 tok/s and exclude some admission/queue waits. Actual slots remained four.
+- Memory is tight: ~58 GiB in use and <1 GiB available, ~665 MiB swap used after long tests. No container OOM or engine failure. Four full KV host states are allocated at load. Long-context retrieval is a repetitive synthetic sanity test, not a quality evaluation.
+- Published compact evidence: `reports/q2.json`. Raw logs and JSON remain in `results/`. Maya image also built successfully (`sha256:e0f01724f464e19bd72ec98003d77c6bee894f7f35e4d1c9785163ca802ad8e9`); executable and pack/MTP tools' `--help` checks pass. Maya runtime baseline still not tested.
+
+## User-requested Q3/Q4 comparison
+- Stop Q2, verify empty GPU, then test Q3 **ISTA IQ3_XXS** and Q4 **Unsloth UD-IQ4_XS** at the identical 262144 context / requested four slots / INT8 / no vision, same pinned engine/image. Q4 is a mixed ~4-bit quant, not uniform Q4_K.
+- Added `--quant q2|q3|q4` lifecycle profiles and a reproducible `scripts/suite.py` with the same repeated short/medium and near-full retrieval workloads; compact per-quant reports go into git.
+- Q2 model SHA256 verified against upstream. Q3 n-gram shard is byte-identical (`316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113`) and hard-linked from Q2, saving 28.8 GB and another transfer. Q3 weight download started in `qwenflash-strata-q3`; Q2 remains stopped.
+- Q4 files are being fetched/prepared in **no-start** container `qwenflash-q4-prepare`, using `STRATA_CONTROL_INSTALL=1` and upstream `setup.py --no-start`. It will not launch a competing model server. Plain setup without that environment tried the source-installer path; stopped it and switched to the bundled component path before any model download.
+- Initial additional disk headroom 169 GiB, enough for Q3 weights (~47 GB), Q4 (~94 GB) and small native packs because Q3 n-gram/MTP are shared. Test engines sequentially; larger experts may require reduced RAM residency and NVMe reads.

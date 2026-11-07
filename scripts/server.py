@@ -61,11 +61,18 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('action', choices=['start', 'stop', 'status', 'logs', 'enable-restart'])
     p.add_argument('--engine', choices=['strata', 'maya'], default='strata')
+    p.add_argument('--quant', choices=['q2', 'q3', 'q4'], default='q2',
+                   help='Strata profile: IQ2_XS, IQ3_XXS or UD-IQ4_XS')
     p.add_argument('--port', type=int, default=8000)
     p.add_argument('--gpu', default='nvidia.com/gpu=all', help='Docker CDI GPU device')
     p.add_argument('--memlock', help='optional memlock limit in bytes (daemon must permit it)')
     a = p.parse_args()
     cfg = json.loads((ROOT / 'config/engines.json').read_text())[a.engine]
+    if a.engine == 'strata' and a.quant != 'q2':
+        cfg['name'] += '-' + a.quant
+        cfg['environment']['MODEL'] = 'IQ3_XXS' if a.quant == 'q3' else 'UD-IQ4_XS'
+        cfg['environment']['FAMILY'] = 'qwen' if a.quant == 'q3' else 'unsloth'
+        cfg['environment']['PRESET'] = a.quant
     name = cfg['name']
     if a.action == 'start':
         busy = gpu_busy()
@@ -91,7 +98,7 @@ def main():
         slots = 4 if a.engine == 'strata' else 1
         qualify(client, slots)
         result = benchmark(client, slots, 'Explain in detail how a GPU works.', 64)
-        output = ROOT / 'results' / f'{a.engine}-qualification.json'
+        output = ROOT / 'results' / f'{a.engine}-{a.quant}-qualification.json'
         output.parent.mkdir(exist_ok=True)
         output.write_text(json.dumps(result, indent=2) + '\n')
         run('docker', 'update', '--restart', 'unless-stopped', name)
