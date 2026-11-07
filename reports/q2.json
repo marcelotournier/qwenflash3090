@@ -3,6 +3,13 @@
   "image": "ghcr.io/niko1221/strata@sha256:83e37db8625c67b61c579fd7c0f9068f2d831037a937f139c569502b54290998",
   "context_requested": 262144,
   "slots_requested": 4,
+  "runtime": {
+    "kv": "int8",
+    "kv_resident": 32768,
+    "vision": false,
+    "resident_budget_gib": null,
+    "expert_residency": "full pinned arena"
+  },
   "measurements": {
     "solo": {
       "rounds": 3,

@@ -2,7 +2,14 @@
 
 Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
 
-**Status:** Q2 is qualified, healthy, and tested with four near-256K requests. Q3/Q4 comparison is in progress. Results: [`reports/q2.json`](reports/q2.json).
+**Status:** Q2 and Q3 are qualified and tested with four near-256K requests. Q4 comparison is in progress. Results: [`reports/q2.json`](reports/q2.json), [`reports/q3.json`](reports/q3.json).
+
+| Quant | Solo decode | Four-client aggregate¹ | ~4K prefill | ~16K prefill |
+|---|---:|---:|---:|---:|
+| IQ2_XS | 123.6 | 134.4 | 1836.8 | 2639.8 |
+| IQ3_XXS | 78.8 | 93.2 | 1223.0 | 1910.8 |
+
+Tokens/s, medians of three rounds. ¹End-to-end, includes short-prompt reads and admission. All run with 262144 context and four provisioned slots.
 
 Q2 medians (3 rounds): **123.6 tok/s solo decode**, **134.4 tok/s aggregate four-client end-to-end**, **1836.8 / 2639.8 tok/s prefill** at ~4K / ~16K. Four-client per-request decode median: **41.1 tok/s**, not 100. All five near-256K retrieval requests returned the three passcodes; this synthetic test is not a general quality benchmark.
 
@@ -71,7 +78,7 @@ python3 scripts/server.py start --quant q4   # Unsloth UD-IQ4_XS, same settings
 python3 scripts/suite.py --quant q4 --run
 ```
 
-The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3's byte-identical n-gram shard can be hard-linked after verifying its SHA256 against the upstream manifest, saving 28.8 GB. Q4 uses a different n-gram shard. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
+The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3/Q4 force streaming KV (`kv-resident=32768`) and a 28 GiB resident expert complement to fit the four full-context states; without streaming KV, Q3 failed at prefill-buffer allocation. Context and concurrency are not reduced. Q3's byte-identical n-gram shard can be hard-linked after verifying its SHA256 against the upstream manifest, saving 28.8 GB. Q4 uses a different n-gram shard. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
 
 ## Maya baseline
 

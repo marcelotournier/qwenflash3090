@@ -27,7 +27,11 @@ def prompts():
 
 def summarize(directory, quant):
     report = {'quant': quant, 'image': json.loads((ROOT / 'config/engines.json').read_text())['strata']['image'],
-              'context_requested': 262144, 'slots_requested': 4, 'measurements': {},
+              'context_requested': 262144, 'slots_requested': 4,
+              'runtime': {'kv': 'int8', 'kv_resident': 32768, 'vision': False,
+                          'resident_budget_gib': None if quant == 'q2' else 28,
+                          'expert_residency': 'full pinned arena' if quant == 'q2' else 'resident cache complement + file tier'},
+              'measurements': {},
               'limits': ['Synthetic repetitive prompts, not a general quality evaluation.',
                          'End-to-end rate includes prefill/queue time; native timings can exclude admission waits.',
                          'Long retrieval answers are short and not a sustained full-context decode benchmark.']}

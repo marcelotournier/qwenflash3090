@@ -60,3 +60,13 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 - Q2 model SHA256 verified against upstream. Q3 n-gram shard is byte-identical (`316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113`) and hard-linked from Q2, saving 28.8 GB and another transfer. Q3 weight download started in `qwenflash-strata-q3`; Q2 remains stopped.
 - Q4 files are being fetched/prepared in **no-start** container `qwenflash-q4-prepare`, using `STRATA_CONTROL_INSTALL=1` and upstream `setup.py --no-start`. It will not launch a competing model server. Plain setup without that environment tried the source-installer path; stopped it and switched to the bundled component path before any model download.
 - Initial additional disk headroom 169 GiB, enough for Q3 weights (~47 GB), Q4 (~94 GB) and small native packs because Q3 n-gram/MTP are shared. Test engines sequentially; larger experts may require reduced RAM residency and NVMe reads.
+
+## Q3 completed — 256K / four slots
+- First attempt failed cleanly at load: setup did not stream KV at this RAM/quant combination, so four slot states used **14.61 GiB VRAM** and left no expert/prefill cache. Context and concurrency were NOT reduced.
+- Fixed profiles Q3/Q4 to force `kv-resident=32768 resident-experts=on resident-budget-gib=28`. KV remains INT8; full context retained; only placement changes. This leaves enough host RAM for streaming KV without a ~40 GiB full Q3 expert arena. Q3 now has ~12.65 GiB expert VRAM; ~27.31 GiB complement plus 0.69 GiB lent-slot duplicates in the 28 GiB pinned tier. Some prefill-lent experts still read from files.
+- Q4 downloader paused during Q3 benchmarks (no competing storage traffic), then resumed after Q3 stopped. Q3 qualified, healthy, `unless-stopped` enabled; explicitly stopped after tests.
+- `reports/q3.json`: 3-round solo decode median **78.8 tok/s** (77.2–89.4); four-client per-request median **28.15 tok/s** (24.6–33.2); aggregate four-client end-to-end median **93.17 tok/s**.
+- ~4K prefill median **1223.0 tok/s**; ~16K prefill median **1910.8 tok/s**. Same repetitive test fixtures and 256 generated tokens as Q2.
+- Near-full single input **261034 tokens**: 142.10 s wall; prefill 1845.3 tok/s; short answer decode 42.7 tok/s; all passcodes correct.
+- Four near-full requests: **573.25 s** wall, every request processed ~261K input tokens and returned every passcode. Same caution as Q2: serialized prompt reads and short answers, not sustained four-way full-context generation.
+- Q3 misses the solo 100 tok/s target on this placement/hardware. It trades lower speed for a larger quant; no claim of measured quality improvement from these sanity tests.

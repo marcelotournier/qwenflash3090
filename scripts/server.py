@@ -73,6 +73,9 @@ def main():
         cfg['environment']['MODEL'] = 'IQ3_XXS' if a.quant == 'q3' else 'UD-IQ4_XS'
         cfg['environment']['FAMILY'] = 'qwen' if a.quant == 'q3' else 'unsloth'
         cfg['environment']['PRESET'] = a.quant
+        # At 256K x4, keeping all KV in VRAM leaves no prefill space.
+        # Stream KV and cap expert RAM so its four host copies still fit 64 GB.
+        cfg['environment']['STRATA_SET'] = 'kv-resident=32768 resident-experts=on resident-budget-gib=28'
     name = cfg['name']
     if a.action == 'start':
         busy = gpu_busy()
