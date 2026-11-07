@@ -1,0 +1,15 @@
+{
+  "strata": {
+    "image": "ghcr.io/niko1221/strata@sha256:83e37db8625c67b61c579fd7c0f9068f2d831037a937f139c569502b54290998",
+    "name": "qwenflash-strata",
+    "environment": {
+      "FAMILY": "qwen", "MODEL": "IQ2_XS", "CONTEXT": "256k", "PARALLEL": "4",
+      "KV": "int8", "VISION": "off", "TUNE": "skip"
+    }
+  },
+  "maya": {
+    "image": "qwenflash-maya:local",
+    "name": "qwenflash-maya",
+    "revision": "7bf15ac68f9bb5026bd5298849608c83be4ff6c2"
+  }
+}

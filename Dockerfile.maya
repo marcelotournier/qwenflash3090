@@ -1,0 +1,27 @@
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66 AS build
+ARG MAYA_REV=7bf15ac68f9bb5026bd5298849608c83be4ff6c2
+ARG GGML_REV=3cf03257f219afbe7334045ff7c6a06ac68c627d
+ARG BUILD_JOBS=4
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git cmake ninja-build g++ \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -fL --retry 5 https://github.com/mw00/project-maya/archive/${MAYA_REV}.tar.gz | tar xz --strip-components=1 \
+    && mkdir -p /llama && curl -fL --retry 5 https://github.com/ggml-org/llama.cpp/archive/${GGML_REV}.tar.gz | tar xz -C /llama --strip-components=1
+RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_ENABLE_CUDA=ON \
+    -DCMAKE_CUDA_ARCHITECTURES=86 -DSTRATA_NATIVE_EXPERTS=ON -DSTRATA_PORTABLE=ON \
+    -DSTRATA_BUILD_TESTS=OFF -DSTRATA_GGML_DIR=/llama \
+    && cmake --build build --target maya -j ${BUILD_JOBS}
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libgomp1 python3 \
+    python3-numpy python3-jinja2 python3-regex python3-yaml python3-tqdm python3-requests python3-pil python3-psutil python3-jsonschema \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /src/build/maya /app/maya
+COPY --from=build /src/tools /opt/maya/tools
+COPY --from=build /src/serve /opt/maya/serve
+COPY --from=build /src/data /opt/maya/data
+COPY --from=build /src/LICENSE* /opt/maya/
+COPY --from=build /llama/gguf-py /opt/llama/gguf-py
+ENV PYTHONPATH=/opt/llama/gguf-py STRATA_GGUF_PY=/opt/llama/gguf-py PYTHONUNBUFFERED=1
+WORKDIR /opt/maya
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15m --retries=3 CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+ENTRYPOINT ["python3", "serve/server.py", "--engine", "strata", "--config", "/config/maya.json", "--host", "0.0.0.0", "--port", "8080"]

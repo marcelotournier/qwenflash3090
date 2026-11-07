@@ -1,0 +1,103 @@
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts' / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+server = load('server')
+bench = load('benchmark')
+model = load('maya_model')
+
+
+class FakeClient:
+    def __init__(self, slots=4, context=262144):
+        self.slots, self.context = slots, context
+        self.prompts = []
+        self.lock = threading.Lock()
+
+    def request(self, path):
+        if path == '/v1/models':
+            return {'data': [{'id': 'test'}]}
+        return {'concurrency': {'serving': self.slots}, 'context': {'max_positions': self.context}}
+
+    def complete(self, model, prompt, tokens):
+        with self.lock:
+            self.prompts.append(prompt)
+        return {'text': '4', 'usage': {'completion_tokens': 16}, 'timings': {'predicted_per_second': 100}}
+
+
+class Tests(unittest.TestCase):
+    def test_qualify(self):
+        self.assertEqual(bench.qualify(FakeClient())['concurrency']['serving'], 4)
+
+    def test_slot_fallback_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'slots'):
+            bench.qualify(FakeClient(slots=3))
+
+    def test_small_context_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'context'):
+            bench.qualify(FakeClient(context=65536))
+
+    def test_bad_answer_rejected(self):
+        client = FakeClient()
+        client.complete = lambda *args: {'text': '5'}
+        with self.assertRaisesRegex(RuntimeError, 'Arithmetic'):
+            bench.qualify(client)
+
+    def test_four_distinct_requests(self):
+        client = FakeClient()
+        result = bench.benchmark(client, 4, 'prompt', 16)
+        self.assertEqual(len(result['requests']), 4)
+        self.assertEqual(len(set(client.prompts)), 4)
+        self.assertGreater(result['aggregate_end_to_end_tok_s'], 0)
+
+    def test_key_private_and_stable(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'ROOT', Path(tmp)):
+            path = server.ensure_key()
+            original = path.read_text()
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(server.ensure_key().read_text(), original)
+            self.assertNotIn(original.split('=', 1)[1].strip(), json.dumps(json.loads((ROOT / 'config/engines.json').read_text())))
+
+    def test_pinned_start(self):
+        cfg = json.loads((ROOT / 'config/engines.json').read_text())['strata']
+        with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'ROOT', Path(tmp)):
+            command = server.start_command('strata', cfg, 8000, 'nvidia.com/gpu=all')
+        self.assertIn('@sha256:', command[-1])
+        self.assertIn('127.0.0.1:8000:8080', command)
+        self.assertIn('PARALLEL=4', command)
+        self.assertIn('CONTEXT=256k', command)
+        self.assertEqual(command[command.index('--restart') + 1], 'no')
+        self.assertNotIn('--ulimit', command)
+
+    def test_hash_and_size_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'model'
+            path.write_bytes(b'abc')
+            digest = model.sha256(path)
+            self.assertTrue(model.verify(path, 3, digest))
+            self.assertFalse(model.verify(path, 4, digest))
+            self.assertFalse(model.verify(path, 3, 'bad'))
+
+    def test_client_requires_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '.env'
+            path.write_text('')
+            with self.assertRaisesRegex(ValueError, 'API_KEY'):
+                bench.Client('http://localhost:8000', path)
+
+
+if __name__ == '__main__':
+    unittest.main()
