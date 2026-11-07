@@ -2,12 +2,13 @@
 
 Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
 
-**Status:** Q2 and Q3 are qualified and tested with four near-256K requests. Q4 comparison is in progress. Results: [`reports/q2.json`](reports/q2.json), [`reports/q3.json`](reports/q3.json).
+**Status:** Q2, Q3 and Q4 all passed the same 256K/four-slot suite, including five near-full-context retrieval requests each. Results: [`Q2`](reports/q2.json), [`Q3`](reports/q3.json), [`Q4`](reports/q4.json). **Q2 is restored as the running default** on `127.0.0.1:8000`, with `restart=unless-stopped`; Q3/Q4 are explicitly stopped.
 
 | Quant | Solo decode | Four-client aggregate¹ | ~4K prefill | ~16K prefill |
 |---|---:|---:|---:|---:|
 | IQ2_XS | 123.6 | 134.4 | 1836.8 | 2639.8 |
 | IQ3_XXS | 78.8 | 93.2 | 1223.0 | 1910.8 |
+| UD-IQ4_XS | 16.8 | 29.8 | 406.6 | 791.3 |
 
 Tokens/s, medians of three rounds. ¹End-to-end, includes short-prompt reads and admission. All run with 262144 context and four provisioned slots.
 
@@ -61,11 +62,13 @@ python3 scripts/benchmark.py --prompt-file /path/to/prompt.txt --concurrency 1 -
 
 Results include actual token usage, per-request server `timings`, model, status snapshots and aggregate end-to-end rate (includes prefill/queue time). Leading request identifiers avoid shared-prefix reuse. A short default prompt measures decode, **not representative prefill speed**. Use a known 4K/16K-token input for prefill; repeat at least three times and report cold/warm state. Verify `usage.prompt_tokens` rather than assuming character counts equal tokens.
 
-Acceptance still required:
-- Coherent text, tool calls, streaming, and cancellation.
-- One ~256K prompt with retrieval checks, using reported prompt-token counts and room for output/template.
-- Four concurrent long sessions and actual `concurrency.serving == 4`. Shared KV capacity may not support **four full 256K histories**; do not confuse the context setting with that stronger requirement.
-- Repeated solo and four-client timings, then restart/reboot persistence.
+Qualification completed:
+- Three rounds per quant: solo/four-client decode and ~4K/~16K prefill, with four actual slots.
+- Per quant: one and four concurrently submitted **~261K-token** prompts; every answer retrieved all three passcodes. Four prompt reads are effectively serialized; these short retrieval answers do not measure sustained full-context generation.
+- Q2 forced function call returned valid `add(x=3,y=5)` JSON; streaming SSE returned the correct answer and `[DONE]`.
+- Q2 stopped/restarted successfully and re-qualified. Rootless Docker service is enabled and user lingering is on; no actual reboot test performed.
+
+Still unqualified: cancellation under load, long-form answer quality, sustained four-client full-context decode, and actual reboot recovery. None of the quants reaches 100 tok/s **per client** at concurrency four. Q4 is constrained by expert/file-tier traffic and fails the original throughput targets on this host.
 
 ## Compare Q3 / Q4
 

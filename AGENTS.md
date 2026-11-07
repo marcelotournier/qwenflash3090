@@ -70,3 +70,21 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 - Near-full single input **261034 tokens**: 142.10 s wall; prefill 1845.3 tok/s; short answer decode 42.7 tok/s; all passcodes correct.
 - Four near-full requests: **573.25 s** wall, every request processed ~261K input tokens and returned every passcode. Same caution as Q2: serialized prompt reads and short answers, not sustained four-way full-context generation.
 - Q3 misses the solo 100 tok/s target on this placement/hardware. It trades lower speed for a larger quant; no claim of measured quality improvement from these sanity tests.
+
+## Q4 completed — 256K / four slots
+- Unsloth **UD-IQ4_XS** downloaded and SHA256-checked by the pinned upstream installer; prepared successfully in no-start mode. Native pack (~1.2 GiB dense conversion), shared MTP. Setup used the original pinned three-shard quant (not the newer four-shard v3.1 variant).
+- Started Q4 only after Q3 stopped and GPU compute list was empty. Same engine 0.1.55, context 262144, four actual slots, INT8 KV, 32768 resident cells, 28 GiB pinned expert complement. Qualification passed; healthy, no OOM, `unless-stopped` enabled before tests.
+- Q4 expert cache: **5271 slots / 11.87 GiB**. GPU-missing experts total 43.56 GiB; 28 GiB held in RAM, the rest read from files. None of the 1661 prefill-lent expert slots have duplicate RAM backing, so long prompts repeatedly fetch from SSD. Direct PLE probe 67989 rows/s is fine; the bottleneck is **expert tier capacity/reads**, not n-gram row latency.
+- `reports/q4.json`: solo decode median **16.8 tok/s**; four-client per-request median **9.05 tok/s**; aggregate four-client end-to-end median **29.78 tok/s**. Three rounds of the same 256-output-token short workload.
+- ~4K prefill median **406.6 tok/s**, decode 28.6; ~16K prefill median **791.3 tok/s**, decode 28.9. Cache/routing/workload effects are large, so do not extrapolate short-prompt decode to other workloads.
+- Single near-full **261034-token** retrieval: **283.82 s** wall; all passcodes correct. Four near-full inputs **261031–261035 tokens**: **1169.57 s** wall, all passcodes correct in every answer. No reduced context/concurrency used.
+- Q4 misses decode and prefill targets on this host. Potential future A/B: file I/O policy / RAM-vs-lent-slot placement / smaller prompt chunks, with identical prompts and output checks. No expert skipping or quality-changing shortcut was enabled. The final comparison uses the upstream adaptive I/O defaults, not an untested direct-read override.
+
+## Final deployment / checks
+- **Restored Q2 as running default** after explicitly stopping Q4 and checking GPU availability. Stop/start reload and arithmetic/four-request re-qualification passed; initial recheck at 55 s was too early, then succeeded after the load finished. Endpoint `http://127.0.0.1:8000/v1`; secret remains only in ignored `.env`.
+- Q2 healthy with `restart=unless-stopped`. Q3/Q4 containers and model data retained, explicitly stopped so they do not compete or auto-start on daemon restart. Original GLM container also remains stopped and preserved.
+- Rootless Docker user service is enabled, `Linger=yes`. Reboot itself was not performed. `unless-stopped` handles exited processes, not a merely unhealthy healthcheck.
+- Additional Q2 API smoke: forced `add` function call produced valid arguments `{x:3,y:5}`; streaming SSE produced `4` and `[DONE]`. Local raw evidence `results/api-smoke.json`.
+- Twelve offline tests pass, including profile settings, GPU conflict refusal and HTTP token accounting. GitHub repository contains compact Q2/Q3/Q4 reports, implementation, test suite, configs and this journal; model weights, secrets and large raw logs stay local.
+- **Disk now only ~36 GiB free (97% used)** after retaining all three quants. Do not start the optional ~80 GB Maya download without freeing space or using another NVMe; its downloader checks capacity. Do not delete the shared Q2/Q3 n-gram inode while assuming they are independent copies.
+- Remaining qualification: cancellation under load, general quality/agentic benchmarks, sustained full-context four-client generation, actual reboot recovery. The 100 tok/s goal is met by Q2 solo short/medium decode, NOT per client at four-way concurrency and NOT guaranteed at full context.
