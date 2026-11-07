@@ -2,7 +2,7 @@
 
 Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
 
-**Status:** Q2, Q3 and Q4 all passed the same 256K/four-slot suite, including five near-full-context retrieval requests each. Results: [`Q2`](reports/q2.json), [`Q3`](reports/q3.json), [`Q4`](reports/q4.json). **Q2 is restored as the running default** on `127.0.0.1:8000`, with `restart=unless-stopped`; Q3/Q4 are explicitly stopped.
+**Status:** Q2, Q3 and Q4 all passed the same 256K/four-slot suite, including five near-full-context retrieval requests each. Results: [`Q2`](reports/q2.json), [`Q3`](reports/q3.json), [`Q4`](reports/q4.json). **Q2 is restored as the running default** on `127.0.0.1:8000`, with `restart=unless-stopped`; Q3/Q4 are explicitly stopped. Q4 weights and its derived pack were subsequently deleted at user request; reports remain, and Q4 needs a fresh download to run again.
 
 | Quant | Solo decode | Four-client aggregate¹ | ~4K prefill | ~16K prefill |
 |---|---:|---:|---:|---:|

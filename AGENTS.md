@@ -88,3 +88,7 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 - Twelve offline tests pass, including profile settings, GPU conflict refusal and HTTP token accounting. GitHub repository contains compact Q2/Q3/Q4 reports, implementation, test suite, configs and this journal; model weights, secrets and large raw logs stay local.
 - **Disk now only ~36 GiB free (97% used)** after retaining all three quants. Do not start the optional ~80 GB Maya download without freeing space or using another NVMe; its downloader checks capacity. Do not delete the shared Q2/Q3 n-gram inode while assuming they are independent copies.
 - Remaining qualification: cancellation under load, general quality/agentic benchmarks, sustained full-context four-client generation, actual reboot recovery. The 100 tok/s goal is met by Q2 solo short/medium decode, NOT per client at four-way concurrency and NOT guaranteed at full context.
+
+## User-requested Q4 cleanup
+- Deleted Q4 GGUF directory `data/strata/Strata-data/models/unsloth-UD-IQ4_XS` and Q4-only derived pack `data/strata/Strata-data/packs/unsloth-ud-iq4_xs`.
+- Reclaimed ~89 GiB; disk now ~123 GiB free. Q2/Q3 weights and shared MTP assets preserved; Q2 remains healthy and serving. Q4 reports/configuration retained, but running Q4 again requires downloading/preparing its weights again.
