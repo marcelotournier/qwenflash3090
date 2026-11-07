@@ -78,7 +78,10 @@ def main():
         cfg['environment']['PRESET'] = a.quant
         # At 256K x4, keeping all KV in VRAM leaves no prefill space.
         # Stream KV and cap expert RAM so its four host copies still fit 64 GB.
-        cfg['environment']['STRATA_SET'] = 'kv-resident=32768 resident-experts=on resident-budget-gib=28'
+        budget = 32 if a.quant in ('q3', 'q3-xxs') else 28
+        cfg['environment']['STRATA_SET'] = f'kv-resident=32768 resident-experts=on resident-budget-gib={budget}'
+        if a.quant in ('q3', 'q3-xxs'):
+            cfg['environment']['STRATA_SET'] += ' conversation-cache-mib=0'
     name = cfg['name']
     if a.action == 'start':
         busy = gpu_busy()
