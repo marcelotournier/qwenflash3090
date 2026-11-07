@@ -91,6 +91,20 @@ class Tests(unittest.TestCase):
             self.assertFalse(model.verify(path, 4, digest))
             self.assertFalse(model.verify(path, 3, 'bad'))
 
+    def test_quant_profiles_keep_context_and_slots(self):
+        for quant, model_name, family in [('q3', 'IQ3_XXS', 'qwen'), ('q4', 'UD-IQ4_XS', 'unsloth')]:
+            with patch('sys.argv', ['server.py', 'start', '--quant', quant]), \
+                    patch.object(server, 'gpu_busy', return_value=''), \
+                    patch.object(server, 'run', return_value=''), \
+                    patch.object(server, 'start_command', return_value=['docker', 'fake']) as command:
+                server.main()
+                cfg = command.call_args.args[1]
+                self.assertEqual(cfg['name'], 'qwenflash-strata-' + quant)
+                self.assertEqual(cfg['environment']['MODEL'], model_name)
+                self.assertEqual(cfg['environment']['FAMILY'], family)
+                self.assertEqual(cfg['environment']['CONTEXT'], '256k')
+                self.assertEqual(cfg['environment']['PARALLEL'], '4')
+
     def test_busy_gpu_refuses_start(self):
         with patch('sys.argv', ['server.py', 'start']), \
                 patch.object(server, 'gpu_busy', return_value='123 other-server 22000 MiB'), \
