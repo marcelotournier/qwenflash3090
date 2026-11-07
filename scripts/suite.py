@@ -26,7 +26,9 @@ def prompts():
 
 
 def summarize(directory, quant):
-    report = {'quant': quant, 'image': json.loads((ROOT / 'config/engines.json').read_text())['strata']['image'],
+    config = json.loads((ROOT / 'config/engines.json').read_text())['strata']
+    image = config['unsloth_image'] if quant in ('q3', 'q3-xxs') else config['image']
+    report = {'quant': quant, 'image': image,
               'context_requested': 262144, 'slots_requested': 4,
               'runtime': {'kv': 'int8', 'kv_resident': 32768, 'vision': False,
                           'resident_budget_gib': None if quant == 'q2' else 28,
@@ -65,9 +67,10 @@ def summarize(directory, quant):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--quant', choices=['q2', 'q3', 'q4'], required=True)
+    p.add_argument('--quant', choices=['q2', 'q3', 'q3-xxs', 'q4'], required=True)
     p.add_argument('--directory', type=Path, help='Raw result directory; defaults to results/<quant>')
     p.add_argument('--run', action='store_true', help='Run the suite; otherwise summarize existing files only')
+    p.add_argument('--quick', action='store_true', help='Short/medium performance screening, omit full-context retrieval')
     a = p.parse_args()
     directory = a.directory or ROOT / 'results' / a.quant
     directory.mkdir(parents=True, exist_ok=True)
@@ -75,6 +78,12 @@ def main():
     try:
         if a.run:
             client = Client('http://127.0.0.1:8000', ROOT / '.env')
+            expected = {'q2': 'qwen3.8-flash-next-iq2_xs', 'q3': 'qwen3.8-flash-next-unsloth-ud-q3_k_xl',
+                        'q3-xxs': 'qwen3.8-flash-next-unsloth-ud-iq3_xxs',
+                        'q4': 'qwen3.8-flash-next-unsloth-ud-iq4_xs'}[a.quant]
+            actual = client.request('/v1/models')['data'][0]['id']
+            if actual != expected:
+                raise RuntimeError(f'Wrong model for {a.quant}: expected {expected}, got {actual}')
             qualify(client, 4)
             data = prompts()
             for mode in ['solo', 'four', 'prefill4k', 'prefill16k']:
@@ -82,7 +91,7 @@ def main():
                     row = benchmark(client, 4 if mode == 'four' else 1, data[mode], 256)
                     (directory / f'{mode}-repeat-{i}.json').write_text(json.dumps(row, indent=2))
                     print(mode, i, round(row['aggregate_end_to_end_tok_s'], 2), flush=True)
-            for mode, concurrency in [('context256k', 1), ('context256k-four', 4)]:
+            for mode, concurrency in ([] if a.quick else [('context256k', 1), ('context256k-four', 4)]):
                 row = benchmark(client, concurrency, data['context256k'], 64)
                 (directory / (mode + '.json')).write_text(json.dumps(row, indent=2))
                 if not all(all(code in req['text'] for code in PASSES) for req in row['requests']):

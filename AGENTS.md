@@ -92,3 +92,11 @@ Create a Qwen3.8-Flash-Next server based on Project Maya for one RTX 3090 and 64
 ## User-requested Q4 cleanup
 - Deleted Q4 GGUF directory `data/strata/Strata-data/models/unsloth-UD-IQ4_XS` and Q4-only derived pack `data/strata/Strata-data/packs/unsloth-ud-iq4_xs`.
 - Reclaimed ~89 GiB; disk now ~123 GiB free. Q2/Q3 weights and shared MTP assets preserved; Q2 remains healthy and serving. Q4 reports/configuration retained, but running Q4 again requires downloading/preparing its weights again.
+
+## Replace ISTA Q3 with Unsloth — user request
+- User requested deleting ISTA Q3 and selecting the **largest Unsloth Q3 that actually sustains roughly 70s tok/s solo decode**, keeping 256K context and four provisioned slots. This is a measured selection target, not a speed promise.
+- Deleted `models/IQ3_XXS` and `packs/iq3_xxs` under `data/strata/Strata-data`, and removed its stopped container. Q2's shared n-gram hard link remains valid; historical benchmark moved to `reports/ista-iq3_xxs.json` and local raw results to `results/ista-iq3_xxs`.
+- First candidate: **Unsloth UD-Q3_K_XL**, 89.5 GB download / 56.2 GB experts; next smaller Q3 is **UD-IQ3_XXS**, 83.6 GB download / 50.3 GB experts. Source: https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF at `d96201194f103c906994f283f504209dc8d2a10c`, four-shard Dynamic v3.1 sets. Model sizes verified against HF tree API and upstream catalog.
+- These sets require engine >=0.1.57, so pulled/pinned Strata **0.2.12 / engine 0.1.58** image `ghcr.io/niko1221/strata@sha256:c3a853420670f4c0f5a948c2d9e9904af4cedf52b11bc8cf167602dc5c578bcc`. Q2/Q4 historical baseline image remains pinned separately; comparisons across engine versions are not quant-only comparisons.
+- Explicitly stopped Q2 and verified no GPU compute processes before starting largest candidate in `qwenflash-strata-q3`. Requested context 262144, slots 4, INT8 streaming KV, initial 28 GiB expert complement. Download/preparation underway. Q2 preserved as fallback.
+- Updated `--quant q3` to Unsloth UD-Q3_K_XL and added `--quant q3-xxs` for UD-IQ3_XXS. Suite now verifies the serving model matches the report label and supports `--quick` screening before spending time on near-full-context tests.

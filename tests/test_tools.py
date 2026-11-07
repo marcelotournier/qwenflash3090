@@ -92,7 +92,9 @@ class Tests(unittest.TestCase):
             self.assertFalse(model.verify(path, 3, 'bad'))
 
     def test_quant_profiles_keep_context_and_slots(self):
-        for quant, model_name, family in [('q3', 'IQ3_XXS', 'qwen'), ('q4', 'UD-IQ4_XS', 'unsloth')]:
+        for quant, model_name, family in [('q3', 'UD-Q3_K_XL', 'unsloth'),
+                                          ('q3-xxs', 'UD-IQ3_XXS', 'unsloth'),
+                                          ('q4', 'UD-IQ4_XS', 'unsloth')]:
             with patch('sys.argv', ['server.py', 'start', '--quant', quant]), \
                     patch.object(server, 'gpu_busy', return_value=''), \
                     patch.object(server, 'run', return_value=''), \

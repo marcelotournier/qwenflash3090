@@ -1,5 +1,5 @@
 {
-  "quant": "q3",
+  "quant": "ista-iq3_xxs",
   "image": "ghcr.io/niko1221/strata@sha256:83e37db8625c67b61c579fd7c0f9068f2d831037a937f139c569502b54290998",
   "context_requested": 262144,
   "slots_requested": 4,

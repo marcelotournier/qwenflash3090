@@ -2,7 +2,7 @@
 
 Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
 
-**Status:** Q2, Q3 and Q4 all passed the same 256K/four-slot suite, including five near-full-context retrieval requests each. Results: [`Q2`](reports/q2.json), [`Q3`](reports/q3.json), [`Q4`](reports/q4.json). **Q2 is restored as the running default** on `127.0.0.1:8000`, with `restart=unless-stopped`; Q3/Q4 are explicitly stopped. Q4 weights and its derived pack were subsequently deleted at user request; reports remain, and Q4 needs a fresh download to run again.
+**Status:** historical Q2, ISTA Q3 and Unsloth Q4 all passed the 256K/four-slot suite. Results: [`Q2`](reports/q2.json), [`ISTA Q3`](reports/ista-iq3_xxs.json), [`Q4`](reports/q4.json). ISTA Q3 and Q4 weights/packs were subsequently deleted at user request. **Unsloth Q3 selection is now in progress**, starting with UD-Q3_K_XL, then UD-IQ3_XXS if needed to approach 70s tok/s decode. Q2 is preserved but stopped during preparation/testing.
 
 | Quant | Solo decode | Four-client aggregate¹ | ~4K prefill | ~16K prefill |
 |---|---:|---:|---:|---:|
@@ -74,14 +74,16 @@ Still unqualified: cancellation under load, long-form answer quality, sustained 
 
 ```sh
 make stop                         # stop Q2; check GPU before every switch
-python3 scripts/server.py start --quant q3   # ISTA IQ3_XXS, same 256K / four slots
+python3 scripts/server.py start --quant q3   # Unsloth UD-Q3_K_XL, 256K / four slots
 python3 scripts/suite.py --quant q3 --run    # once loaded; ~10 minutes of long tests
 python3 scripts/server.py stop --quant q3
 python3 scripts/server.py start --quant q4   # Unsloth UD-IQ4_XS, same settings
 python3 scripts/suite.py --quant q4 --run
 ```
 
-The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3/Q4 force streaming KV (`kv-resident=32768`) and a 28 GiB resident expert complement to fit the four full-context states; without streaming KV, Q3 failed at prefill-buffer allocation. Context and concurrency are not reduced. Q3's byte-identical n-gram shard can be hard-linked after verifying its SHA256 against the upstream manifest, saving 28.8 GB. Q4 uses a different n-gram shard. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
+Unsloth Q3 profiles use the separately pinned Strata 0.2.12 / engine 0.1.58 image (the new quants require >=0.1.57). `--quant q3-xxs` selects the smaller UD-IQ3_XXS. Old Q2/Q4 baselines use engine 0.1.55, so these are not controlled engine-only or quant-only comparisons.
+
+The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3/Q4 force streaming KV (`kv-resident=32768`) and a 28 GiB resident expert complement to fit the four full-context states; without streaming KV, Q3 failed at prefill-buffer allocation. Context and concurrency are not reduced. The historical ISTA Q3 shared its n-gram shard with Q2; the new Unsloth Q3 uses a different shard. Unsloth Q3 variants can share their byte-identical n-gram shard after SHA256 verification. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
 
 ## Maya baseline
 
