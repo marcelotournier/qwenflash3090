@@ -1,0 +1,9 @@
+vendor/
+models/
+data/
+results/
+.env
+.playwright/
+.playwright-cli/
+__pycache__/
+*.pyc
