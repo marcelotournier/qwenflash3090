@@ -1,115 +1,106 @@
 # Qwen Flash on one RTX 3090
 
-Reproducible Qwen3.8-Flash-Next deployment for a 24 GB RTX 3090 and 64 GB RAM. Research and current blockers: [AGENTS.md](AGENTS.md).
+Qwen3.8-Flash-Next on a 24 GB RTX 3090 / 64 GB RAM host (58.7 GiB reported). Research and experiment history: [AGENTS.md](AGENTS.md).
 
-**Status:** historical Q2, ISTA Q3 and Unsloth Q4 all passed the 256K/four-slot suite. Results: [`Q2`](reports/q2.json), [`ISTA Q3`](reports/ista-iq3_xxs.json), [`Q4`](reports/q4.json). ISTA Q3 and Q4 weights/packs were subsequently deleted at user request. **Unsloth Q3 selection is now in progress**, starting with UD-Q3_K_XL, then UD-IQ3_XXS if needed to approach 70s tok/s decode. Q2 is preserved but stopped during preparation/testing.
+## Selected model
 
-| Quant | Solo decode | Four-client aggregate¹ | ~4K prefill | ~16K prefill |
-|---|---:|---:|---:|---:|
-| IQ2_XS | 123.6 | 134.4 | 1836.8 | 2639.8 |
-| IQ3_XXS | 78.8 | 93.2 | 1223.0 | 1910.8 |
-| UD-IQ4_XS | 16.8 | 29.8 | 406.6 | 791.3 |
+**[Unsloth UD-IQ3_XXS](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c/UD-IQ3_XXS)**, Dynamic v3.1, is the largest tested Unsloth Q3 that reached roughly 70 tok/s on short/medium prompts. The larger **UD-Q3_K_XL** reached only 32–40 tok/s and was rejected. Its weights were removed after screening; reports retained. The earlier **ISTA Q3** and Unsloth Q4 weights were also deleted at user request.
 
-Tokens/s, medians of three rounds. ¹End-to-end, includes short-prompt reads and admission. All run with 262144 context and four provisioned slots.
+Selected Q3 is running as **`qwenflash-strata-q3`**, healthy, `restart=unless-stopped`, at **`http://127.0.0.1:8000/v1`**. Q2 is preserved but stopped.
 
-Q2 medians (3 rounds): **123.6 tok/s solo decode**, **134.4 tok/s aggregate four-client end-to-end**, **1836.8 / 2639.8 tok/s prefill** at ~4K / ~16K. Four-client per-request decode median: **41.1 tok/s**, not 100. All five near-256K retrieval requests returned the three passcodes; this synthetic test is not a general quality benchmark.
+### Measured results
 
-## Engines
+Three repeated rounds, 256 generated tokens, **262144 configured context / four actual slots**:
 
-| Engine | Model | Context requested | Concurrent decode |
-|---|---|---:|---|
-| Strata 0.2.9 / engine 0.1.55 (primary) | ISTA-DASLab IQ2_XS, original Qwen | 262144 | 4 requested; verify actual provisioned slots |
-| Project Maya (baseline) | Unsloth UD-IQ2_XS, original Qwen | 262144 | 1; its Qwen path lacks GLM's scheduler |
+| Workload | Solo decode | Four-client aggregate¹ | Prefill |
+|---|---:|---:|---:|
+| Short prompt | **70.3** (68.8–76.7) | **76.6** | not representative |
+| ~4K prompt | **72.6** | — | **896.5** |
+| ~16K prompt | **73.8** | — | **1491.1** |
 
-Primary image is pinned by digest in `config/engines.json`. Maya source, ggml and CUDA bases are pinned in `Dockerfile.maya`; model revisions, sizes and SHA256 are pinned in `config/maya-model.lock.json`. Different quantizations mean this is a deployment comparison, not a controlled engine-only comparison.
+Tokens/s, medians. ¹Aggregate end-to-end, including prompt/admission time; four-client **per-request decode median is 23.25**, not 70.
 
-Goals: ~100 tok/s decode and ~1000 tok/s prefill. Distinguish **per-request decode** from **aggregate throughput**. Four requests are separate HTTP calls, not OpenAI `n:4`.
+Near-full-context retrieval also passed: one **261033-token** input in 158.01 s, then four **261032–261037-token** inputs in 639.76 s total. Every answer retrieved all three passcodes. **Full-context short-answer solo decode was 36.9 tok/s, not 70.** The 70s result applies to short/medium histories with 256K capacity allocated, not sustained generation at 256K or per client at concurrency four. Prompt reads are effectively serialized.
+
+Evidence: [`reports/q3.json`](reports/q3.json). Repetitive synthetic prompts are sanity/performance checks, not a general quality evaluation.
+
+### Placement and memory
+
+- Strata **0.2.12 / engine 0.1.58**, image pinned by digest in `config/engines.json`.
+- INT8 KV, 262144 tokens per slot, **20480 KV cells resident on GPU**; full KV host copies retained. This window does not reduce context.
+- **34 GiB pinned expert complement**, ~13.04 GiB GPU expert cache, parked conversation cache off.
+- `STRATA_RESIDENT_HEADROOM_GIB=2` instead of the upstream 4 GiB reserve. This avoids the budget being clamped near 32 GiB, allowing the ~33.80 GiB non-GPU expert set to fit RAM. No expert skipping, routing approximation, or lower-bit KV was enabled.
+- **RAM is tight**: <1 GiB available after full-context tests, ~3.7 GiB swap used. Do not co-run model servers or RAM-heavy applications. Extra host usage can clamp residency and lower speed. No OOM during the suite.
+- MTP drafting; DFlash2 is not available in this four-slot mode.
 
 ## Run
 
-Requires Python 3, GNU Make, Docker, NVIDIA Container Toolkit/CDI and an NVMe with about 120 GB free for Strata preparation. Model license: Qwen Community License 1.0; review the upstream model terms.
+Requires Python 3, GNU Make, rootless Docker with NVIDIA CDI, and NVMe storage. Fresh Q3 setup needs roughly 100–120 GB free. Model terms: Qwen Community License 1.0; review upstream licenses.
 
 ```sh
 make test
 # Inspect and explicitly stop any other model servers first:
 docker ps
 nvidia-smi
-# On this host the pre-existing server is glm53-flash-maya.
-make start
-make logs                       # first start downloads ~74 GB including the drafter
-# Once loaded:
-make qualify                    # API + arithmetic, actual slots/context, four calls;
-                                # then sets restart=unless-stopped
-make bench                      # records engine timings and wall time in results/
+make start                         # default: selected Unsloth Q3
+make logs                          # first start downloads/prepares model
+make qualify                       # smoke + actual slots/context + four calls,
+                                   # then enables restart=unless-stopped
+python3 scripts/suite.py --quant q3 --run
 ```
 
-`make start` refuses a busy compute GPU or an existing same-named container. It never stops or deletes unrelated containers. For a stopped existing deployment, inspect it then `docker start qwenflash-strata` (check GPU availability first). To apply configuration changes, `make stop`, `docker rm qwenflash-strata`, then `make start`; data remains in `data/strata`.
+`make start` refuses a busy compute GPU or an existing same-named container. It never deletes/stops unrelated services. To restart the existing selected deployment, check GPU availability then `docker start qwenflash-strata-q3`. To change configuration: `make stop`, `docker rm qwenflash-strata-q3`, `make start`; persistent data remains in `data/strata`.
 
-Host port: `127.0.0.1:8000`; OpenAI base URL: `http://127.0.0.1:8000/v1`. A random local API key is created in `.env` (0600, ignored by git). Use its `API_KEY` value; discover the model name with authenticated `GET /v1/models`. Health: `GET /health`.
+API key: private generated `.env` (0600, git-ignored). Use its `API_KEY`; obtain the model name from authenticated `GET /v1/models`. Health: `GET /health`. Host port is loopback-only. No host networking or privileged mode; SELinux label isolation disabled for CDI compatibility.
 
-Rootless Docker uses `--device nvidia.com/gpu=all` here. It cannot raise the daemon's memlock hard limit to infinity; the script inherits the daemon limit. `--memlock BYTES` is available if the host permits it. Only this machine's loopback port is published; SELinux label isolation is disabled for NVIDIA CDI compatibility. No privileged mode or host networking.
+Rootless Docker cannot raise its daemon's memlock hard limit to infinity; the script inherits it (`--memlock BYTES` is optional). CUDA pinned registration succeeded on this host. Rootless Docker service is enabled and user lingering is on; no actual reboot test performed. Docker restart policy restarts exited containers, not merely unhealthy ones.
 
-`make qualify` enables restart only after basic operation succeeds. It does **not** assert that performance goals or 256K prompts pass. A Docker healthcheck does not restart an unhealthy process; `unless-stopped` restarts exited containers. Rootless Docker must itself start at login/boot for this policy to take effect.
+## Profiles and historical results
 
-## Measurement and acceptance
+| Profile | Model / engine | State |
+|---|---|---|
+| `q3` (default) | **Unsloth UD-IQ3_XXS**, engine 0.1.58 | selected and running |
+| `q2` | ISTA IQ2_XS, engine 0.1.55 | downloaded, stopped; solo 123.6 tok/s |
+| `q3-xl` | Unsloth UD-Q3_K_XL, engine 0.1.58 | rejected for speed; weights removed |
+| `q4` | Unsloth UD-IQ4_XS, engine 0.1.55 | tested, weights removed |
+
+For Q2 fallback, stop Q3 and check the GPU first, then `docker start qwenflash-strata`. Lifecycle commands accept `--quant q2`, `--quant q3-xl`, or `--quant q4`; deleted models need a fresh download. Historical quant comparisons spanning engine versions are not controlled quant-only comparisons.
+
+Reports: [Q2](reports/q2.json), [deleted ISTA Q3](reports/ista-iq3_xxs.json), [Q4](reports/q4.json), [Unsloth larger Q3 / 28 GiB RAM](reports/unsloth-ud-q3_k_xl-28g.json), [larger Q3 / 32 GiB](reports/unsloth-ud-q3_k_xl-32g.json), [selected Q3 before tuning](reports/unsloth-ud-iq3_xxs-32g.json). Shared n-gram hard links are retained where hashes match; metadata shards are quant-specific despite equal sizes. Upstream validates every file's SHA256.
+
+## Measurement
 
 ```sh
 python3 scripts/benchmark.py --concurrency 1 --output results/solo.json
 python3 scripts/benchmark.py --concurrency 4 --output results/four.json
-# For a representative long input (budget room for template/output):
-python3 scripts/benchmark.py --prompt-file /path/to/prompt.txt --concurrency 1 --tokens 128
+python3 scripts/benchmark.py --prompt-file /path/to/prompt.txt --concurrency 1 --tokens 256
+python3 scripts/suite.py --quant q3 --run --quick   # omit long-context stage
 ```
 
-Results include actual token usage, per-request server `timings`, model, status snapshots and aggregate end-to-end rate (includes prefill/queue time). Leading request identifiers avoid shared-prefix reuse. A short default prompt measures decode, **not representative prefill speed**. Use a known 4K/16K-token input for prefill; repeat at least three times and report cold/warm state. Verify `usage.prompt_tokens` rather than assuming character counts equal tokens.
+Results record actual usage, per-request native timings, model, status and aggregate wall rate. Leading identifiers prevent shared-prefix reuse. A short prompt does not measure representative prefill speed. `suite.py` verifies the actual model and repeats short/four-client/4K/16K workloads three times, then tests one/four near-256K retrieval requests. Raw data stays under `results/`; compact reports and journal are committed.
 
-Qualification completed:
-- Three rounds per quant: solo/four-client decode and ~4K/~16K prefill, with four actual slots.
-- Per quant: one and four concurrently submitted **~261K-token** prompts; every answer retrieved all three passcodes. Four prompt reads are effectively serialized; these short retrieval answers do not measure sustained full-context generation.
-- Q2 forced function call returned valid `add(x=3,y=5)` JSON; streaming SSE returned the correct answer and `[DONE]`.
-- Q2 stopped/restarted successfully and re-qualified. Rootless Docker service is enabled and user lingering is on; no actual reboot test performed.
+Completed: actual four slots/context checks, retrieval, coherent short outputs; Q2 streaming SSE and forced tool-call JSON smoke; Q2 stop/start qualification. Still unqualified: cancellation under load, general agentic quality, sustained full-context four-client generation, actual reboot recovery.
 
-Still unqualified: cancellation under load, long-form answer quality, sustained four-client full-context decode, and actual reboot recovery. None of the quants reaches 100 tok/s **per client** at concurrency four. Q4 is constrained by expert/file-tier traffic and fails the original throughput targets on this host.
+## Optional Maya baseline
 
-## Compare Q3 / Q4
-
-```sh
-make stop                         # stop Q2; check GPU before every switch
-python3 scripts/server.py start --quant q3   # Unsloth UD-Q3_K_XL, 256K / four slots
-python3 scripts/suite.py --quant q3 --run    # once loaded; ~10 minutes of long tests
-python3 scripts/server.py stop --quant q3
-python3 scripts/server.py start --quant q4   # Unsloth UD-IQ4_XS, same settings
-python3 scripts/suite.py --quant q4 --run
-```
-
-Unsloth Q3 profiles use the separately pinned Strata 0.2.12 / engine 0.1.58 image (the new quants require >=0.1.57). `--quant q3-xxs` selects the smaller UD-IQ3_XXS. Old Q2/Q4 baselines use engine 0.1.55, so these are not controlled engine-only or quant-only comparisons.
-
-The profiles share `data/strata` and the MTP assets but have separate container/preset names. Q3/Q4 force streaming KV (`kv-resident=32768`) and a 28 GiB resident expert complement to fit the four full-context states; without streaming KV, Q3 failed at prefill-buffer allocation. Context and concurrency are not reduced. The historical ISTA Q3 shared its n-gram shard with Q2; the new Unsloth Q3 uses a different shard. Unsloth Q3 variants can share their byte-identical n-gram shard after SHA256 verification. Allow another ~140 GB for Q3/Q4 plus preparation. `suite.py` repeats solo/four-client decode and 4K/16K prefill three times, then runs one and four near-256K retrieval requests. Compact reports are committed under `reports/`; raw files stay local under `results/<quant>`.
-
-## Maya baseline
+Maya's Qwen path lacks its GLM multi-request scheduler; it is a **single-sequence baseline**, not the four-way solution.
 
 ```sh
 make maya-build
-make maya-download              # ~80 GB additional; resumable, SHA256 checked
-make maya-pack                  # CPU-only indexing + MTP preparation
-make stop                       # never run both engines together
+make maya-download                 # ~80 GB additional + preparation; capacity checked
+make maya-pack
+make stop
 python3 scripts/server.py start --engine maya
 python3 scripts/benchmark.py --concurrency 1 --output results/maya.json
 ```
 
-Maya uses a 32 GB expert RAM cap, INT8 KV and NVMe-mapped n-grams. MTP weights must load even with drafting disabled (`--mtp-max-t 1`); benchmark before enabling proposals. No expert skipping or altered routing is enabled. The image is an optional baseline, not a claimed four-way solution.
-
-## NVMe / RAM tuning
-
-Keep `data/` and `models/` on NVMe. The ~29 GB n-gram table must not be copied into the already-constrained host RAM. Prefer IQ2_XS so experts fit in RAM + VRAM without constant SSD misses. Preserve upstream adaptive read/staging defaults until a measured baseline exists. A large thread count is not automatically faster.
-
-For a measured bottleneck, compare identical prompts/restarts with direct vs mapped PLE reads and upstream stager settings (`STRATA_STAGER_THREADS`, `STRATA_STAGER_SSD`); record engine version, storage reads, timings and output quality. Avoid global cache drops or destructive disk benchmarks. Maya has different knobs (`MAYA_EXPERT_STAGERS`); do not reuse GLM-only settings for Qwen.
+Source, ggml and CUDA bases are pinned in `Dockerfile.maya`; model revisions/hashes in `config/maya-model.lock.json`. Image build and executable/pack tool help checks passed; Maya runtime is untested. Model download is resumable and SHA256-verified. Free enough space before attempting it.
 
 ## Layout
 
-- `scripts/server.py`: lifecycle, GPU preflight and qualified restart policy.
-- `scripts/benchmark.py`: concurrent client and timing capture, stdlib only.
-- `scripts/maya_model.py`: pinned, verified download and pack preparation.
-- `config/`: pinned engines, Maya model manifest and baseline settings.
-- `tests/`: offline safety/configuration/measurement tests; no model downloads.
+- `scripts/server.py`: GPU preflight, lifecycle, selected placement, qualified restart policy.
+- `scripts/benchmark.py`, `scripts/suite.py`: stdlib client, timing capture and reproducible qualification.
+- `scripts/maya_model.py`: optional verified model download/preparation.
+- `config/`, `reports/`, `tests/`: pinned settings, compact results, offline safety tests.
 
-Model files, keys and raw benchmark outputs are intentionally not committed. Summaries and blockers belong in `AGENTS.md`.
+Keep weights, secrets and raw logs out of git. NVMe tuning must be measured: preserve adaptive I/O defaults unless an A/B demonstrates a gain. More pinned RAM alone is not automatically faster; the rejected larger Q3 demonstrated that.

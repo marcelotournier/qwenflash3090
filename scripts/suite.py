@@ -27,12 +27,14 @@ def prompts():
 
 def summarize(directory, quant):
     config = json.loads((ROOT / 'config/engines.json').read_text())['strata']
-    image = config['unsloth_image'] if quant in ('q3', 'q3-xxs') else config['image']
+    image = config['unsloth_image'] if quant in ('q3', 'q3-xl') else config['image']
     report = {'quant': quant, 'image': image,
               'context_requested': 262144, 'slots_requested': 4,
-              'runtime': {'kv': 'int8', 'kv_resident': 32768, 'vision': False,
-                          'resident_budget_gib': None if quant == 'q2' else (32 if quant in ('q3', 'q3-xxs') else 28),
-                          'conversation_cache_mib': 0 if quant in ('q3', 'q3-xxs') else None,
+              'runtime': {'kv': 'int8', 'kv_resident': 20480 if quant == 'q3' else 32768, 'vision': False,
+                          'resident_headroom_gib': 2 if quant == 'q3' else None,
+                          'budget_note': 'Requested expert RAM cap; the engine may clamp it to available RAM.',
+                          'resident_budget_gib': {'q2': None, 'q3': 34, 'q3-xl': 32, 'q4': 28}[quant],
+                          'conversation_cache_mib': 0 if quant in ('q3', 'q3-xl') else None,
                           'expert_residency': 'full pinned arena' if quant == 'q2' else 'resident cache complement + file tier'},
               'measurements': {},
               'limits': ['Synthetic repetitive prompts, not a general quality evaluation.',
@@ -68,7 +70,7 @@ def summarize(directory, quant):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--quant', choices=['q2', 'q3', 'q3-xxs', 'q4'], required=True)
+    p.add_argument('--quant', choices=['q2', 'q3', 'q3-xl', 'q4'], required=True)
     p.add_argument('--directory', type=Path, help='Raw result directory; defaults to results/<quant>')
     p.add_argument('--run', action='store_true', help='Run the suite; otherwise summarize existing files only')
     p.add_argument('--quick', action='store_true', help='Short/medium performance screening, omit full-context retrieval')
@@ -79,8 +81,8 @@ def main():
     try:
         if a.run:
             client = Client('http://127.0.0.1:8000', ROOT / '.env')
-            expected = {'q2': 'qwen3.8-flash-next-iq2_xs', 'q3': 'qwen3.8-flash-next-unsloth-ud-q3_k_xl',
-                        'q3-xxs': 'qwen3.8-flash-next-unsloth-ud-iq3_xxs',
+            expected = {'q2': 'qwen3.8-flash-next-iq2_xs', 'q3': 'qwen3.8-flash-next-unsloth-ud-iq3_xxs',
+                        'q3-xl': 'qwen3.8-flash-next-unsloth-ud-q3_k_xl',
                         'q4': 'qwen3.8-flash-next-unsloth-ud-iq4_xs'}[a.quant]
             actual = client.request('/v1/models')['data'][0]['id']
             if actual != expected:

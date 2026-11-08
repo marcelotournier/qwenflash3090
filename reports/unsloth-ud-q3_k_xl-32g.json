@@ -1,0 +1,129 @@
+{
+  "quant": "unsloth-ud-q3_k_xl-32g",
+  "image": "ghcr.io/niko1221/strata@sha256:c3a853420670f4c0f5a948c2d9e9904af4cedf52b11bc8cf167602dc5c578bcc",
+  "context_requested": 262144,
+  "slots_requested": 4,
+  "runtime": {
+    "kv": "int8",
+    "kv_resident": 32768,
+    "vision": false,
+    "resident_budget_gib": 32,
+    "conversation_cache_mib": 0,
+    "expert_residency": "resident cache complement + file tier"
+  },
+  "measurements": {
+    "solo": {
+      "rounds": 3,
+      "requests": 3,
+      "engine": "0.1.58",
+      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "actual_slots": 4,
+      "prompt_tokens": {
+        "median": 81,
+        "min": 79,
+        "max": 84
+      },
+      "prefill_tok_s": {
+        "median": 40.0,
+        "min": 36.6,
+        "max": 40.0
+      },
+      "per_request_decode_tok_s": {
+        "median": 32.3,
+        "min": 19.6,
+        "max": 34.4
+      },
+      "aggregate_end_to_end_tok_s": {
+        "median": 25.03,
+        "min": 16.96,
+        "max": 27.17
+      }
+    },
+    "four": {
+      "rounds": 3,
+      "requests": 12,
+      "engine": "0.1.58",
+      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "actual_slots": 4,
+      "prompt_tokens": {
+        "median": 79.5,
+        "min": 77,
+        "max": 82
+      },
+      "prefill_tok_s": {
+        "median": 49.9,
+        "min": 9.2,
+        "max": 63.9
+      },
+      "per_request_decode_tok_s": {
+        "median": 11.0,
+        "min": 9.0,
+        "max": 15.4
+      },
+      "aggregate_end_to_end_tok_s": {
+        "median": 34.13,
+        "min": 33.57,
+        "max": 35.33
+      }
+    },
+    "prefill4k": {
+      "rounds": 3,
+      "requests": 3,
+      "engine": "0.1.58",
+      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "actual_slots": 4,
+      "prompt_tokens": {
+        "median": 3972,
+        "min": 3971,
+        "max": 3975
+      },
+      "prefill_tok_s": {
+        "median": 532.6,
+        "min": 517.7,
+        "max": 550.4
+      },
+      "per_request_decode_tok_s": {
+        "median": 36.6,
+        "min": 23.2,
+        "max": 37.8
+      },
+      "aggregate_end_to_end_tok_s": {
+        "median": 17.41,
+        "min": 14.03,
+        "max": 17.98
+      }
+    },
+    "prefill16k": {
+      "rounds": 3,
+      "requests": 3,
+      "engine": "0.1.58",
+      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "actual_slots": 4,
+      "prompt_tokens": {
+        "median": 15674,
+        "min": 15674,
+        "max": 15676
+      },
+      "prefill_tok_s": {
+        "median": 1002.3,
+        "min": 829.6,
+        "max": 1002.5
+      },
+      "per_request_decode_tok_s": {
+        "median": 35.5,
+        "min": 29.4,
+        "max": 36.4
+      },
+      "aggregate_end_to_end_tok_s": {
+        "median": 10.51,
+        "min": 9.79,
+        "max": 11.29
+      }
+    }
+  },
+  "limits": [
+    "Synthetic repetitive prompts, not a general quality evaluation.",
+    "End-to-end rate includes prefill/queue time; native timings can exclude admission waits.",
+    "Long retrieval answers are short and not a sustained full-context decode benchmark."
+  ]
+}

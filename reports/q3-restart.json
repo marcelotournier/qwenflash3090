@@ -1,0 +1,15 @@
+{
+  "model": "qwen3.8-flash-next-unsloth-ud-iq3_xxs",
+  "engine": "0.1.58",
+  "actual_slots": 4,
+  "context": {
+    "native": 262144,
+    "max_positions": 262144
+  },
+  "solo_decode_tok_s": [
+    67.4,
+    72.1,
+    77.1
+  ],
+  "median": 72.1
+}

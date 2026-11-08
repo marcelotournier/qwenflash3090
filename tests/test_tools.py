@@ -92,8 +92,8 @@ class Tests(unittest.TestCase):
             self.assertFalse(model.verify(path, 3, 'bad'))
 
     def test_quant_profiles_keep_context_and_slots(self):
-        for quant, model_name, family in [('q3', 'UD-Q3_K_XL', 'unsloth'),
-                                          ('q3-xxs', 'UD-IQ3_XXS', 'unsloth'),
+        for quant, model_name, family in [('q3', 'UD-IQ3_XXS', 'unsloth'),
+                                          ('q3-xl', 'UD-Q3_K_XL', 'unsloth'),
                                           ('q4', 'UD-IQ4_XS', 'unsloth')]:
             with patch('sys.argv', ['server.py', 'start', '--quant', quant]), \
                     patch.object(server, 'gpu_busy', return_value=''), \
@@ -106,6 +106,11 @@ class Tests(unittest.TestCase):
                 self.assertEqual(cfg['environment']['FAMILY'], family)
                 self.assertEqual(cfg['environment']['CONTEXT'], '256k')
                 self.assertEqual(cfg['environment']['PARALLEL'], '4')
+                if quant == 'q3':
+                    self.assertEqual(cfg['image'], cfg['unsloth_image'])
+                    self.assertIn('resident-budget-gib=34', cfg['environment']['STRATA_SET'])
+                    self.assertIn('kv-resident=20480', cfg['environment']['STRATA_SET'])
+                    self.assertIn('STRATA_RESIDENT_HEADROOM_GIB=2', cfg['environment']['STRATA_SET'])
 
     def test_busy_gpu_refuses_start(self):
         with patch('sys.argv', ['server.py', 'start']), \

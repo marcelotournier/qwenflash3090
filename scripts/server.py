@@ -61,8 +61,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('action', choices=['start', 'stop', 'status', 'logs', 'enable-restart'])
     p.add_argument('--engine', choices=['strata', 'maya'], default='strata')
-    p.add_argument('--quant', choices=['q2', 'q3', 'q3-xxs', 'q4'], default='q2',
-                   help='Strata: ISTA IQ2_XS, Unsloth UD-Q3_K_XL, UD-IQ3_XXS or UD-IQ4_XS')
+    p.add_argument('--quant', choices=['q2', 'q3', 'q3-xl', 'q4'], default='q3',
+                   help='Strata: ISTA IQ2_XS, selected Unsloth UD-IQ3_XXS, UD-Q3_K_XL or UD-IQ4_XS')
     p.add_argument('--port', type=int, default=8000)
     p.add_argument('--gpu', default='nvidia.com/gpu=all', help='Docker CDI GPU device')
     p.add_argument('--memlock', help='optional memlock limit in bytes (daemon must permit it)')
@@ -70,18 +70,21 @@ def main():
     cfg = json.loads((ROOT / 'config/engines.json').read_text())[a.engine]
     if a.engine == 'strata' and a.quant != 'q2':
         cfg['name'] += '-' + a.quant
-        cfg['environment']['MODEL'] = {'q3': 'UD-Q3_K_XL', 'q3-xxs': 'UD-IQ3_XXS',
+        cfg['environment']['MODEL'] = {'q3': 'UD-IQ3_XXS', 'q3-xl': 'UD-Q3_K_XL',
                                        'q4': 'UD-IQ4_XS'}[a.quant]
         cfg['environment']['FAMILY'] = 'unsloth'
-        if a.quant in ('q3', 'q3-xxs'):
+        if a.quant in ('q3', 'q3-xl'):
             cfg['image'] = cfg['unsloth_image']
         cfg['environment']['PRESET'] = a.quant
         # At 256K x4, keeping all KV in VRAM leaves no prefill space.
         # Stream KV and cap expert RAM so its four host copies still fit 64 GB.
-        budget = 32 if a.quant in ('q3', 'q3-xxs') else 28
+        budget = {'q3': 34, 'q3-xl': 32, 'q4': 28}[a.quant]
         cfg['environment']['STRATA_SET'] = f'kv-resident=32768 resident-experts=on resident-budget-gib={budget}'
-        if a.quant in ('q3', 'q3-xxs'):
+        if a.quant in ('q3', 'q3-xl'):
             cfg['environment']['STRATA_SET'] += ' conversation-cache-mib=0'
+        if a.quant == 'q3':
+            cfg['environment']['STRATA_SET'] = cfg['environment']['STRATA_SET'].replace('kv-resident=32768', 'kv-resident=20480')
+            cfg['environment']['STRATA_SET'] += ' STRATA_RESIDENT_HEADROOM_GIB=2'
     name = cfg['name']
     if a.action == 'start':
         busy = gpu_busy()

@@ -5,9 +5,11 @@
   "slots_requested": 4,
   "runtime": {
     "kv": "int8",
-    "kv_resident": 32768,
+    "kv_resident": 20480,
     "vision": false,
-    "resident_budget_gib": 32,
+    "resident_headroom_gib": 2,
+    "budget_note": "Requested expert RAM cap; the engine may clamp it to available RAM.",
+    "resident_budget_gib": 34,
     "conversation_cache_mib": 0,
     "expert_residency": "resident cache complement + file tier"
   },
@@ -16,109 +18,246 @@
       "rounds": 3,
       "requests": 3,
       "engine": "0.1.58",
-      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "model": "qwen3.8-flash-next-unsloth-ud-iq3_xxs",
       "actual_slots": 4,
       "prompt_tokens": {
-        "median": 81,
-        "min": 79,
+        "median": 80,
+        "min": 78,
         "max": 84
       },
       "prefill_tok_s": {
-        "median": 40.0,
-        "min": 36.6,
-        "max": 40.0
+        "median": 77.7,
+        "min": 67.3,
+        "max": 80.4
       },
       "per_request_decode_tok_s": {
-        "median": 32.3,
-        "min": 19.6,
-        "max": 34.4
+        "median": 70.3,
+        "min": 68.8,
+        "max": 76.7
       },
       "aggregate_end_to_end_tok_s": {
-        "median": 25.03,
-        "min": 16.96,
-        "max": 27.17
+        "median": 53.81,
+        "min": 53.28,
+        "max": 58.35
       }
     },
     "four": {
       "rounds": 3,
       "requests": 12,
       "engine": "0.1.58",
-      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "model": "qwen3.8-flash-next-unsloth-ud-iq3_xxs",
       "actual_slots": 4,
       "prompt_tokens": {
-        "median": 79.5,
-        "min": 77,
+        "median": 81.5,
+        "min": 78,
         "max": 82
       },
       "prefill_tok_s": {
-        "median": 49.9,
-        "min": 9.2,
-        "max": 63.9
+        "median": 83.55,
+        "min": 77.5,
+        "max": 87.3
       },
       "per_request_decode_tok_s": {
-        "median": 11.0,
-        "min": 9.0,
-        "max": 15.4
+        "median": 23.25,
+        "min": 19.4,
+        "max": 28.7
       },
       "aggregate_end_to_end_tok_s": {
-        "median": 34.13,
-        "min": 33.57,
-        "max": 35.33
+        "median": 76.6,
+        "min": 71.72,
+        "max": 78.68
       }
     },
     "prefill4k": {
       "rounds": 3,
       "requests": 3,
       "engine": "0.1.58",
-      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "model": "qwen3.8-flash-next-unsloth-ud-iq3_xxs",
       "actual_slots": 4,
       "prompt_tokens": {
-        "median": 3972,
-        "min": 3971,
-        "max": 3975
+        "median": 3974,
+        "min": 3970,
+        "max": 3974
       },
       "prefill_tok_s": {
-        "median": 532.6,
-        "min": 517.7,
-        "max": 550.4
+        "median": 896.5,
+        "min": 874.5,
+        "max": 899.4
       },
       "per_request_decode_tok_s": {
-        "median": 36.6,
-        "min": 23.2,
-        "max": 37.8
+        "median": 72.6,
+        "min": 69.1,
+        "max": 78.0
       },
       "aggregate_end_to_end_tok_s": {
-        "median": 17.41,
-        "min": 14.03,
-        "max": 17.98
+        "median": 32.15,
+        "min": 31.02,
+        "max": 33.11
       }
     },
     "prefill16k": {
       "rounds": 3,
       "requests": 3,
       "engine": "0.1.58",
-      "model": "qwen3.8-flash-next-unsloth-ud-q3_k_xl",
+      "model": "qwen3.8-flash-next-unsloth-ud-iq3_xxs",
       "actual_slots": 4,
       "prompt_tokens": {
         "median": 15674,
-        "min": 15674,
+        "min": 15673,
         "max": 15676
       },
       "prefill_tok_s": {
-        "median": 1002.3,
-        "min": 829.6,
-        "max": 1002.5
+        "median": 1491.1,
+        "min": 1490.1,
+        "max": 1494.4
       },
       "per_request_decode_tok_s": {
-        "median": 35.5,
-        "min": 29.4,
-        "max": 36.4
+        "median": 73.8,
+        "min": 68.3,
+        "max": 74.9
       },
       "aggregate_end_to_end_tok_s": {
-        "median": 10.51,
-        "min": 9.79,
-        "max": 11.29
+        "median": 18.32,
+        "min": 17.94,
+        "max": 18.35
       }
+    },
+    "context256k": {
+      "concurrency": 1,
+      "wall_s": 158.01,
+      "requests": [
+        {
+          "usage": {
+            "prompt_tokens": 261033,
+            "completion_tokens": 20,
+            "total_tokens": 261053,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 261033,
+            "prompt_ms": 157251.1,
+            "prompt_per_token_ms": 0.602,
+            "prompt_per_second": 1660.0,
+            "predicted_n": 20,
+            "predicted_ms": 541.3,
+            "predicted_per_token_ms": 27.065,
+            "predicted_per_second": 36.9,
+            "draft_n": 16,
+            "draft_n_accepted": 13
+          },
+          "answer": "COBALT-FALCON, VIOLET-OTTER, SILVER-IBIS",
+          "retrieval_pass": true
+        }
+      ]
+    },
+    "context256k-four": {
+      "concurrency": 4,
+      "wall_s": 639.76,
+      "requests": [
+        {
+          "usage": {
+            "prompt_tokens": 261037,
+            "completion_tokens": 20,
+            "total_tokens": 261057,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 261037,
+            "prompt_ms": 158143.1,
+            "prompt_per_token_ms": 0.606,
+            "prompt_per_second": 1650.6,
+            "predicted_n": 20,
+            "predicted_ms": 5331.5,
+            "predicted_per_token_ms": 266.575,
+            "predicted_per_second": 3.8,
+            "draft_n": 0,
+            "draft_n_accepted": 0
+          },
+          "answer": "COBALT-FALCON, VIOLET-OTTER, SILVER-IBIS",
+          "retrieval_pass": true
+        },
+        {
+          "usage": {
+            "prompt_tokens": 261034,
+            "completion_tokens": 20,
+            "total_tokens": 261054,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 261034,
+            "prompt_ms": 157945.4,
+            "prompt_per_token_ms": 0.605,
+            "prompt_per_second": 1652.7,
+            "predicted_n": 20,
+            "predicted_ms": 554.0,
+            "predicted_per_token_ms": 27.7,
+            "predicted_per_second": 36.1,
+            "draft_n": 12,
+            "draft_n_accepted": 12
+          },
+          "answer": "COBALT-FALCON, VIOLET-OTTER, SILVER-IBIS",
+          "retrieval_pass": true
+        },
+        {
+          "usage": {
+            "prompt_tokens": 261033,
+            "completion_tokens": 20,
+            "total_tokens": 261053,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 261033,
+            "prompt_ms": 157816.9,
+            "prompt_per_token_ms": 0.605,
+            "prompt_per_second": 1654.0,
+            "predicted_n": 20,
+            "predicted_ms": 5313.8,
+            "predicted_per_token_ms": 265.69,
+            "predicted_per_second": 3.8,
+            "draft_n": 0,
+            "draft_n_accepted": 0
+          },
+          "answer": "COBALT-FALCON, VIOLET-OTTER, SILVER-IBIS",
+          "retrieval_pass": true
+        },
+        {
+          "usage": {
+            "prompt_tokens": 261032,
+            "completion_tokens": 20,
+            "total_tokens": 261052,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 261032,
+            "prompt_ms": 157701.2,
+            "prompt_per_token_ms": 0.604,
+            "prompt_per_second": 1655.2,
+            "predicted_n": 20,
+            "predicted_ms": 5197.3,
+            "predicted_per_token_ms": 259.865,
+            "predicted_per_second": 3.8,
+            "draft_n": 0,
+            "draft_n_accepted": 0
+          },
+          "answer": "COBALT-FALCON, VIOLET-OTTER, SILVER-IBIS",
+          "retrieval_pass": true
+        }
+      ]
     }
   },
   "limits": [
